@@ -1,0 +1,13 @@
+AUTOMAKE_OPTIONS = foreign
+
+ACLOCAL_AMFLAGS = -I m4
+
+SUBDIRS = doc src
+
+DIST_SUBDIRS = doc src
+
+GENFILES = @PACKAGE_NAME@.spec
+
+EXTRA_DIST = \
+	$(GENFILES) \
+	$(GENFILES:%=%.in)
