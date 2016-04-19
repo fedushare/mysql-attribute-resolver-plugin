@@ -2,10 +2,23 @@
 
 ## Build dependencies
 
-```Shell
-yum install -y autoconf libtool make gcc gcc-c++
-yum install -y shibboleth-devel liblog4shib-devel
-```
+* Development tools
+  ```Shell
+  yum install -y autoconf libtool make gcc gcc-c++
+  ```
+
+* Shibboleth SP
+  ```Shell
+  yum install -y shibboleth-devel liblog4shib-devel
+  ```
+
+* MySQL
+  ```Shell
+  wget http://repo.mysql.com/mysql-community-release-el7-5.noarch.rpm
+  rpm -ivh mysql-community-release-el7-5.noarch.rpm
+
+  yum -y install mysql-community-client mysql-community-devel
+  ```
 
 ## Build steps
 
@@ -53,3 +66,5 @@ In `ApplicationDefaults` section:
 
 * https://www.lsc-group.phys.uwm.edu/wiki/ShibSPAccessControlPluginTutorial
 * https://bitbucket.org/PEOFIAMP/shibsp-plugin-attributequery-handler
+* https://dev.mysql.com/doc/refman/5.7/en/c-api-building-clients.html
+* https://dev.mysql.com/doc/ndbapi/en/ndb-start-autotools.html

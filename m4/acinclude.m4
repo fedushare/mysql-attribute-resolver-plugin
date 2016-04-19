@@ -47,7 +47,7 @@ fi
 dnl@synopsys YAD_CHECK_INCLUDE_LIB(INCLUDE, LIBRARY, CODE
 dnl              [, ACTION-IF-FOUND [, ACTION-IF-NOT-FOUND
 dnl              [, OTHER-LIBRARIES]]])
-dnl 
+dnl
 dnl same as the AC_CHECK_LIB except of the following:
 dnl      - You sholud specify include part of test.
 dnl      - You can test any code for linking, not just function calls.
@@ -88,3 +88,4 @@ ifelse([$5], , , [$5
 fi
 ])
 
+m4_include([./m4/mysql.m4])

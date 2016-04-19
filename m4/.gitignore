@@ -1,3 +1,4 @@
 *.m4
 !acinclude.m4
 !acx_pthread.m4
+!mysql.m4
