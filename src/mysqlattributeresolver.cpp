@@ -117,8 +117,10 @@ namespace shibsp {
 
         std::string m_query;
 
-        // Each entry contains a pair column name and attribute name
-        std::vector<std::pair<std::string,std::string> > m_columns;
+        std::set<std::string> m_attributes;
+
+        // Maps a column name to the list of attributes populated by the column
+        std::map<std::string,std::vector<std::string> > m_columns;
 
     };
 
@@ -200,7 +202,24 @@ shibsp::MysqlAttributeResolver::MysqlAttributeResolver(const xercesc::DOMElement
         boost::trim(attributeName);
 
         if (!(columnName.empty() || attributeName.empty())) {
-            m_columns.push_back(std::make_pair(columnName, attributeName));
+            std::pair<std::set<std::string>::iterator, bool> attrResult = m_attributes.insert(attributeName);
+            if (attrResult.second == false) {
+                throw ConfigurationException("MySQL AttributeResolver cannot map multiple columns to the same attribute.");
+            }
+
+            std::map<std::string, std::vector<std::string> >::iterator it;
+            it = m_columns.find(columnName);
+            if (it == m_columns.end()) {
+                std::vector<std::string> attributeList();
+                std::pair<std::map<std::string, std::vector<std::string> >::iterator, bool> insertResult;
+                insertResult = m_columns.insert(std::make_pair(columnName, std::vector<std::string>()));
+                if (insertResult.second) {
+                    it = insertResult.first;
+                } else {
+                    throw ConfigurationException("MySQL AttributeResolver unable to map columns to attributes.");
+                }
+            }
+            it->second.push_back(attributeName);
         }
 
         columnElement = xmltooling::XMLHelper::getNextSiblingElement(columnElement, column);
@@ -221,8 +240,8 @@ void shibsp::MysqlAttributeResolver::resolveAttributes(shibsp::ResolutionContext
 
 void shibsp::MysqlAttributeResolver::getAttributeIds(std::vector<std::string>& attributes) const
 {
-    for (std::vector<std::pair<std::string, std::string> >::const_iterator it = m_columns.begin(); it != m_columns.end(); it++) {
-        attributes.push_back(it->second);
+    for (std::set<std::string>::const_iterator it = m_attributes.begin(); it != m_attributes.end(); it++) {
+        attributes.push_back(*it);
     }
 }
 
