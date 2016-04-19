@@ -219,8 +219,11 @@ void shibsp::MysqlAttributeResolver::resolveAttributes(shibsp::ResolutionContext
         return;
 }
 
-void shibsp::MysqlAttributeResolver::getAttributeIds(std::vector<std::string>& attributes) const {
-
+void shibsp::MysqlAttributeResolver::getAttributeIds(std::vector<std::string>& attributes) const
+{
+    for (std::vector<std::pair<std::string, std::string> >::const_iterator it = m_columns.begin(); it != m_columns.end(); it++) {
+        attributes.push_back(it->second);
+    }
 }
 
 
