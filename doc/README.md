@@ -13,6 +13,40 @@ yum install -y shibboleth-devel liblog4shib-devel
 cd /path/to/mysql-attribute-resolver-plugin
 autoreconf -v -i -f
 ./configure
+make
+sudo make install
+```
+
+## Configuration
+
+In `/etc/shibboleth/shibboleth2.xml`
+
+Inside `SPConfig` section:
+
+```xml
+<OutOfProcess>
+    <Extensions>
+        <Library path="/usr/local/lib/shibboleth/mysqlattributeresolver.so" fatal="true"/>
+    </Extensions>
+</OutOfProcess>
+```
+
+In `ApplicationDefaults` section:
+
+```xml
+<AttributeResolver type="MySQL">
+    <Connection host="localhost"
+        port="3306"
+        username="username"
+        password="password"
+        dbname="dbname" />
+    <Query>
+        <![CDATA[
+            SELECT ...
+        ]]>
+    </Query>
+    <Column name="columnName" attribute="attributeName" />
+</AttributeResolver>
 ```
 
 ## References
