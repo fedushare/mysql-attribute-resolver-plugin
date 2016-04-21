@@ -10,6 +10,7 @@
 #define MYSQLATTRIBUTERESOLVER_EXPORTS
 
 #include <memory>
+#include <regex.h>
 
 #include <boost/algorithm/string.hpp>
 
@@ -116,6 +117,7 @@ namespace shibsp {
         std::string m_connection_dbname;
 
         std::string m_query;
+        std::vector<std::string> m_query_bind_attributes;
 
         std::set<std::string> m_attributes;
 
@@ -190,6 +192,25 @@ shibsp::MysqlAttributeResolver::MysqlAttributeResolver(const xercesc::DOMElement
     if (m_query.empty()) {
         throw ConfigurationException("MySQL AttributeResolver requires <Query> element.");
     }
+
+    regex_t paramRegex;
+    if (regcomp(&paramRegex, "=\\s*\\$([A-Za-z0-9]+)", REG_EXTENDED)) {
+        throw ConfigurationException("Unable to compile query parameter regular expression.");
+    }
+
+    regmatch_t matchGroups[2];
+    int32_t matchReturn = regexec(&paramRegex, m_query.c_str(), 2, matchGroups, 0);
+    while (matchReturn == 0) {
+        std::string paramAttributeName = m_query.substr(matchGroups[1].rm_so, matchGroups[1].rm_eo);
+        m_query_bind_attributes.push_back(paramAttributeName);
+
+        m_query.erase(matchGroups[1].rm_so, matchGroups[1].rm_eo - matchGroups[1].rm_so);
+        m_query.replace(matchGroups[1].rm_so - 1, 1, "?");
+
+        matchReturn = regexec(&paramRegex, m_query.c_str(), 2, matchGroups, 0);
+    }
+
+    regfree(&paramRegex);
 
     // Columns
     xercesc::DOMElement* columnElement = e ? xmltooling::XMLHelper::getFirstChildElement(e, column) : nullptr;
