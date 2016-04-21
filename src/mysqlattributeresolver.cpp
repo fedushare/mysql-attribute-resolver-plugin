@@ -18,6 +18,7 @@
 #include <saml/saml1/core/Assertions.h>
 #include <saml/saml2/core/Assertions.h>
 
+#include <shibsp/attribute/Attribute.h>
 #include <shibsp/attribute/resolver/AttributeResolver.h>
 #include <shibsp/attribute/resolver/ResolutionContext.h>
 #include <shibsp/exceptions.h>
@@ -26,6 +27,8 @@
 #include <shibsp/util/SPConstants.h>
 #include <xmltooling/logging.h>
 #include <xmltooling/util/XMLHelper.h>
+
+#include <mysql.h>
 
 
 namespace shibsp {
@@ -255,8 +258,166 @@ shibsp::MysqlAttributeResolver::MysqlAttributeResolver(const xercesc::DOMElement
 void shibsp::MysqlAttributeResolver::resolveAttributes(shibsp::ResolutionContext& ctx) const
 {
     shibsp::MysqlContext& tctx = dynamic_cast<shibsp::MysqlContext&>(ctx);
-    if (!tctx.getInputAttributes())
+    if (!tctx.getInputAttributes()) {
         return;
+    }
+
+    std::map<std::string,const shibsp::Attribute*> attrmap;
+    for (std::vector<std::string>::const_iterator a = m_query_bind_attributes.begin(); a != m_query_bind_attributes.end(); ++a) {
+        shibsp::Attribute* attr = nullptr;
+        for (std::vector<shibsp::Attribute*>::const_iterator it = tctx.getInputAttributes()->begin(); it != tctx.getInputAttributes()->end(); ++it) {
+            if (*a == (*it)->getId()) {
+                attr = *it;
+                break;
+            }
+        }
+        if (!attr) {
+            m_log.warn("Query parameter attribute (%s) missing", a->c_str());
+            return;
+        }
+        else if (!attrmap.empty() && attr->valueCount() != attrmap.begin()->second->valueCount()) {
+            m_log.warn("All query parameter attributes must contain equal number of values");
+            return;
+        }
+        attrmap[*a] = attr;
+    }
+
+    MYSQL* db_connection = nullptr;
+    db_connection = mysql_init(db_connection);
+    if (!db_connection) {
+        m_log.error("Failed to initialize database connection.");
+        return;
+    }
+
+    if (!mysql_real_connect(db_connection,
+            m_connection_host.c_str(),
+            m_connection_username.c_str(),
+            m_connection_password.c_str(),
+            m_connection_dbname.c_str(),
+            m_connection_port,
+            NULL, 0)
+    ) {
+        m_log.error("Failed to connect to database: %s", mysql_error(db_connection));
+        return;
+    }
+
+    MYSQL_STMT* stmt = nullptr;
+    stmt = mysql_stmt_init(db_connection);
+    if (!stmt) {
+        m_log.error("Failed to initialize statement: %s", mysql_stmt_error(stmt));
+        mysql_close(db_connection);
+        return;
+    }
+
+    if (mysql_stmt_prepare(stmt, m_query.c_str(), m_query.length()) != 0) {
+        m_log.error("Failed to prepare statement: %s", mysql_stmt_error(stmt));
+        mysql_stmt_close(stmt);
+        mysql_close(db_connection);
+        return;
+    }
+
+    uint32_t numParams = m_query_bind_attributes.size();
+    MYSQL_BIND* bind_params = new MYSQL_BIND[numParams];
+    unsigned long* bind_params_length = new unsigned long[numParams];
+    my_bool* bind_params_is_null = new my_bool[numParams];
+    memset(bind_params_is_null, 0, numParams * sizeof(my_bool));
+    my_bool* bind_params_error = new my_bool[numParams];
+
+    for (uint32_t i = 0; i < numParams; i++) {
+        bind_params[i].buffer_type = MYSQL_TYPE_STRING;
+        std::map<std::string,const shibsp::Attribute*>::const_iterator a = attrmap.find(m_query_bind_attributes[i]);
+        if (a == attrmap.end()) {
+            m_log.warn("No '%s' attribute found to bind to query", m_query_bind_attributes[i].c_str());
+        } else {
+            if (a->second->getSerializedValues().empty()) {
+                m_log.warn("'%s' attribute has no value to bind to query", m_query_bind_attributes[i].c_str());
+            } else {
+                std::string attributeValue = a->second->getSerializedValues().at(0);
+                m_log.info("Binding '%s' to %s", attributeValue.c_str(), m_query_bind_attributes[i].c_str());
+                bind_params[i].buffer = (void *) attributeValue.c_str();
+                bind_params[i].buffer_length = attributeValue.length();
+                bind_params_length[i] = attributeValue.length();
+            }
+        }
+        bind_params[i].is_null = &bind_params_is_null[i];
+        m_log.info("%d", bind_params_is_null[i]);
+        bind_params[i].error = &bind_params_error[i];
+        bind_params[i].length = &bind_params_length[i];
+    }
+
+    if (mysql_stmt_bind_param(stmt, bind_params) != 0) {
+        m_log.warn("Failed to bind parameters: %s", mysql_stmt_error(stmt));
+    } else {
+        if (mysql_stmt_execute(stmt) != 0) {
+            m_log.warn("Failed to execute statement: %s", mysql_stmt_error(stmt));
+        } else {
+            MYSQL_RES* query_result = mysql_stmt_result_metadata(stmt);
+            if (!query_result) {
+                m_log.warn("No result metadata found");
+            } else {
+                MYSQL_FIELD* result_fields = mysql_fetch_fields(query_result);
+                uint32_t num_result_fields = mysql_num_fields(query_result);
+
+                MYSQL_BIND* bind_results = new MYSQL_BIND[num_result_fields];
+                char** result_buffer = new char*[num_result_fields];
+                unsigned long* bind_result_length = new unsigned long[num_result_fields];
+                my_bool* bind_result_is_null = new my_bool[num_result_fields];
+                my_bool* bind_result_error = new my_bool[num_result_fields];
+
+                for (uint32_t i = 0; i < num_result_fields; i++) {
+                    m_log.info("Field %d = %s", i, result_fields[i].name);
+                    m_log.info("max length = %lu", result_fields[i].length);
+                    result_buffer[i] = new char[result_fields[i].length];
+
+                    bind_results[i].buffer_type = MYSQL_TYPE_STRING;
+                    bind_results[i].buffer = result_buffer[i];
+                    bind_results[i].buffer_length = result_fields[i].length;
+                    bind_results[i].is_null = &bind_result_is_null[i];
+                    bind_results[i].length = &bind_result_length[i];
+                    bind_results[i].error = &bind_result_error[i];
+                }
+
+                if (mysql_stmt_bind_result(stmt, bind_results) != 0) {
+                    m_log.warn("Failed to bind results: %s", mysql_stmt_error(stmt));
+                } else {
+                    if (mysql_stmt_store_result(stmt) != 0) {
+                        m_log.warn("Failed to store results: %s", mysql_stmt_error(stmt));
+                    } else {
+                        while (mysql_stmt_fetch(stmt) == 0) {
+                            m_log.info("========");
+                            for (uint32_t i = 0; i < num_result_fields; i++) {
+                                std::string column_name(result_fields[i].name);
+                                std::string column_value(result_buffer[i]);
+
+                                m_log.info("%s => %s", column_name.c_str(), column_value.c_str());
+                            }
+                        }
+                    }
+                }
+
+                delete[] bind_result_length;
+                delete[] bind_result_is_null;
+                delete[] bind_result_error;
+                for (uint32_t i = 0; i < num_result_fields; i++) {
+                    delete[] result_buffer[i];
+                }
+                delete[] result_buffer;
+                delete[] bind_results;
+
+                mysql_free_result(query_result);
+            }
+        }
+    }
+
+    delete[] bind_params_length;
+    delete[] bind_params_is_null;
+    delete[] bind_params_error;
+    delete[] bind_params;
+
+    mysql_stmt_free_result(stmt);
+    mysql_stmt_close(stmt);
+    mysql_close(db_connection);
+
 }
 
 void shibsp::MysqlAttributeResolver::getAttributeIds(std::vector<std::string>& attributes) const
