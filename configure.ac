@@ -64,6 +64,13 @@ AC_STRUCT_TM
 # Checks for library functions.
 AC_CHECK_FUNCS([strcasecmp])
 
+AX_CHECK_COMPILE_FLAG([-std=c11], [
+  CFLAGS+=" -std=c11"
+], [
+  echo "C compiler cannot compile C11 code"
+  exit -1
+])
+
 # checks for pthreads
 ACX_PTHREAD([enable_threads="pthread"],[enable_threads="no"])
 if test $enable_threads != "pthread"; then
@@ -80,6 +87,13 @@ AC_LANG(C++)
 # C++ requirements
 AC_CXX_NAMESPACES
 AC_CXX_REQUIRE_STL
+
+AX_CHECK_COMPILE_FLAG([-std=c++11], [
+  CXXFLAGS+=" -std=c++11"
+], [
+  echo "C++ compiler cannot compile C++11 code"
+  exit -1
+])
 
 # are covariant methods allowed?
 AC_LINK_IFELSE(

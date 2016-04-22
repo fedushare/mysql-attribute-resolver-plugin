@@ -88,4 +88,5 @@ ifelse([$5], , , [$5
 fi
 ])
 
+m4_include([./m4/ax_check_compile_flag.m4])
 m4_include([./m4/mysql.m4])
