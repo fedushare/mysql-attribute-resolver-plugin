@@ -19,6 +19,7 @@
 #include <saml/saml2/core/Assertions.h>
 
 #include <shibsp/attribute/Attribute.h>
+#include <shibsp/attribute/SimpleAttribute.h>
 #include <shibsp/attribute/resolver/AttributeResolver.h>
 #include <shibsp/attribute/resolver/ResolutionContext.h>
 #include <shibsp/exceptions.h>
@@ -252,6 +253,21 @@ shibsp::MysqlAttributeResolver::MysqlAttributeResolver(const xercesc::DOMElement
     if (m_columns.empty()) {
         throw ConfigurationException("MySQL AttributeResolver requires at least one <Column> element.");
     }
+
+    m_log.info("Query = %s", m_query.c_str());
+    for (std::vector<std::string>::const_iterator it = m_query_bind_attributes.begin(); it != m_query_bind_attributes.end(); it++) {
+        m_log.info("Bind attribute: %s", it->c_str());
+    }
+
+    for (std::set<std::string>::const_iterator it = m_attributes.begin(); it != m_attributes.end(); it++) {
+        m_log.info("Resolves %s attribute", it->c_str());
+    }
+
+    for (std::map<std::string, std::vector<std::string> >::const_iterator it = m_columns.begin(); it != m_columns.end(); it++) {
+        for (std::vector<std::string>::const_iterator it2 = it->second.begin(); it2 != it->second.end(); it2++) {
+            m_log.info("Column %s -> attribute %s", it->first.c_str(), it2->c_str());
+        }
+    }
 }
 
 
@@ -390,6 +406,20 @@ void shibsp::MysqlAttributeResolver::resolveAttributes(shibsp::ResolutionContext
                                 std::string column_value(result_buffer[i]);
 
                                 m_log.info("%s => %s", column_name.c_str(), column_value.c_str());
+
+                                std::map<std::string, std::vector<std::string> >::const_iterator it;
+                                if ((it = m_columns.find(column_name)) != m_columns.end()) {
+                                    for (std::vector<std::string>::const_iterator dest_attr_name = it->second.begin(); dest_attr_name != it->second.end(); ++dest_attr_name) {
+                                        std::vector<std::string> attr_ids(1, *dest_attr_name);
+                                        std::auto_ptr<shibsp::SimpleAttribute> dest_attr(new shibsp::SimpleAttribute(attr_ids));
+                                        dest_attr->getValues().push_back(column_value);
+                                        if (dest_attr.get() && dest_attr->valueCount()) {
+                                            ctx.getResolvedAttributes().push_back(dest_attr.get());
+                                            dest_attr.release();
+                                        }
+                                    }
+
+                                }
                             }
                         }
                     }
