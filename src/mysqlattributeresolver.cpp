@@ -359,79 +359,75 @@ void shibsp::MysqlAttributeResolver::resolveAttributes(shibsp::ResolutionContext
 
     if (mysql_stmt_bind_param(stmt, bind_params) != 0) {
         m_log.warn("Failed to bind parameters: %s", mysql_stmt_error(stmt));
+    } else if (mysql_stmt_execute(stmt) != 0) {
+        m_log.warn("Failed to execute statement: %s", mysql_stmt_error(stmt));
     } else {
-        if (mysql_stmt_execute(stmt) != 0) {
-            m_log.warn("Failed to execute statement: %s", mysql_stmt_error(stmt));
+        MYSQL_RES* query_result = mysql_stmt_result_metadata(stmt);
+        if (!query_result) {
+            m_log.warn("No result metadata found");
         } else {
-            MYSQL_RES* query_result = mysql_stmt_result_metadata(stmt);
-            if (!query_result) {
-                m_log.warn("No result metadata found");
+            MYSQL_FIELD* result_fields = mysql_fetch_fields(query_result);
+            uint32_t num_result_fields = mysql_num_fields(query_result);
+
+            MYSQL_BIND* bind_results = new MYSQL_BIND[num_result_fields];
+            uint8_t** result_buffer = new uint8_t*[num_result_fields];
+            uint64_t* bind_result_length = new uint64_t[num_result_fields];
+            my_bool* bind_result_is_null = new my_bool[num_result_fields];
+            my_bool* bind_result_error = new my_bool[num_result_fields];
+
+            for (uint32_t i = 0; i < num_result_fields; i++) {
+                m_log.info("Field %d = %s", i, result_fields[i].name);
+                m_log.info("max length = %lu", result_fields[i].length);
+                result_buffer[i] = new uint8_t[result_fields[i].length];
+
+                bind_results[i].buffer_type = MYSQL_TYPE_STRING;
+                bind_results[i].buffer = result_buffer[i];
+                bind_results[i].buffer_length = result_fields[i].length;
+                bind_results[i].is_null = &bind_result_is_null[i];
+                bind_results[i].length = &bind_result_length[i];
+                bind_results[i].error = &bind_result_error[i];
+            }
+
+            if (mysql_stmt_bind_result(stmt, bind_results) != 0) {
+                m_log.warn("Failed to bind results: %s", mysql_stmt_error(stmt));
+            } else if (mysql_stmt_store_result(stmt) != 0) {
+                m_log.warn("Failed to store results: %s", mysql_stmt_error(stmt));
             } else {
-                MYSQL_FIELD* result_fields = mysql_fetch_fields(query_result);
-                uint32_t num_result_fields = mysql_num_fields(query_result);
+                while (mysql_stmt_fetch(stmt) == 0) {
+                    m_log.info("========");
+                    for (uint32_t i = 0; i < num_result_fields; i++) {
+                        std::string column_name(result_fields[i].name);
+                        std::string column_value((char*)result_buffer[i]);
 
-                MYSQL_BIND* bind_results = new MYSQL_BIND[num_result_fields];
-                uint8_t** result_buffer = new uint8_t*[num_result_fields];
-                uint64_t* bind_result_length = new uint64_t[num_result_fields];
-                my_bool* bind_result_is_null = new my_bool[num_result_fields];
-                my_bool* bind_result_error = new my_bool[num_result_fields];
+                        m_log.info("%s => %s", column_name.c_str(), column_value.c_str());
 
-                for (uint32_t i = 0; i < num_result_fields; i++) {
-                    m_log.info("Field %d = %s", i, result_fields[i].name);
-                    m_log.info("max length = %lu", result_fields[i].length);
-                    result_buffer[i] = new uint8_t[result_fields[i].length];
-
-                    bind_results[i].buffer_type = MYSQL_TYPE_STRING;
-                    bind_results[i].buffer = result_buffer[i];
-                    bind_results[i].buffer_length = result_fields[i].length;
-                    bind_results[i].is_null = &bind_result_is_null[i];
-                    bind_results[i].length = &bind_result_length[i];
-                    bind_results[i].error = &bind_result_error[i];
-                }
-
-                if (mysql_stmt_bind_result(stmt, bind_results) != 0) {
-                    m_log.warn("Failed to bind results: %s", mysql_stmt_error(stmt));
-                } else {
-                    if (mysql_stmt_store_result(stmt) != 0) {
-                        m_log.warn("Failed to store results: %s", mysql_stmt_error(stmt));
-                    } else {
-                        while (mysql_stmt_fetch(stmt) == 0) {
-                            m_log.info("========");
-                            for (uint32_t i = 0; i < num_result_fields; i++) {
-                                std::string column_name(result_fields[i].name);
-                                std::string column_value((char*)result_buffer[i]);
-
-                                m_log.info("%s => %s", column_name.c_str(), column_value.c_str());
-
-                                auto attr_and_cols = m_columns.find(column_name);
-                                if (attr_and_cols != m_columns.end()) {
-                                    for (auto dest_attr_name : attr_and_cols->second) {
-                                        std::vector<std::string> attr_ids(1, dest_attr_name);
-                                        std::auto_ptr<shibsp::SimpleAttribute> dest_attr(new shibsp::SimpleAttribute(attr_ids));
-                                        dest_attr->getValues().push_back(column_value);
-                                        if (dest_attr.get() && dest_attr->valueCount()) {
-                                            ctx.getResolvedAttributes().push_back(dest_attr.get());
-                                            dest_attr.release();
-                                        }
-                                    }
-
+                        auto attr_and_cols = m_columns.find(column_name);
+                        if (attr_and_cols != m_columns.end()) {
+                            for (auto dest_attr_name : attr_and_cols->second) {
+                                std::vector<std::string> attr_ids(1, dest_attr_name);
+                                std::auto_ptr<shibsp::SimpleAttribute> dest_attr(new shibsp::SimpleAttribute(attr_ids));
+                                dest_attr->getValues().push_back(column_value);
+                                if (dest_attr.get() && dest_attr->valueCount()) {
+                                    ctx.getResolvedAttributes().push_back(dest_attr.get());
+                                    dest_attr.release();
                                 }
                             }
+
                         }
                     }
                 }
-
-                delete[] bind_result_length;
-                delete[] bind_result_is_null;
-                delete[] bind_result_error;
-                for (uint32_t i = 0; i < num_result_fields; i++) {
-                    delete[] result_buffer[i];
-                }
-                delete[] result_buffer;
-                delete[] bind_results;
-
-                mysql_free_result(query_result);
             }
+
+            delete[] bind_result_length;
+            delete[] bind_result_is_null;
+            delete[] bind_result_error;
+            for (uint32_t i = 0; i < num_result_fields; i++) {
+                delete[] result_buffer[i];
+            }
+            delete[] result_buffer;
+            delete[] bind_results;
+
+            mysql_free_result(query_result);
         }
     }
 
