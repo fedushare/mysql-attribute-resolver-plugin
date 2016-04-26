@@ -397,6 +397,12 @@ void shibsp::MysqlAttributeResolver::resolveAttributes(shibsp::ResolutionContext
                     m_log.info("========");
                     for (uint32_t i = 0; i < num_result_fields; i++) {
                         std::string column_name(result_fields[i].name);
+
+                        if (*bind_results[i].is_null) {
+                            m_log.warn("Null value in '%s' column, unable to map to attribute value.", column_name.c_str());
+                            continue;
+                        }
+
                         std::string column_value((char*)result_buffer[i]);
 
                         m_log.info("%s => %s", column_name.c_str(), column_value.c_str());
