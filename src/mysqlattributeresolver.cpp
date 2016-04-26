@@ -330,7 +330,7 @@ void shibsp::MysqlAttributeResolver::resolveAttributes(shibsp::ResolutionContext
 
     uint32_t num_params = m_query_bind_attributes.size();
     MYSQL_BIND* bind_params = new MYSQL_BIND[num_params];
-    unsigned long* bind_params_length = new unsigned long[num_params];
+    uint64_t* bind_params_length = new uint64_t[num_params];
     my_bool* bind_params_is_null = new my_bool[num_params];
     memset(bind_params_is_null, 0, num_params * sizeof(my_bool));
     my_bool* bind_params_error = new my_bool[num_params];
@@ -371,15 +371,15 @@ void shibsp::MysqlAttributeResolver::resolveAttributes(shibsp::ResolutionContext
                 uint32_t num_result_fields = mysql_num_fields(query_result);
 
                 MYSQL_BIND* bind_results = new MYSQL_BIND[num_result_fields];
-                char** result_buffer = new char*[num_result_fields];
-                unsigned long* bind_result_length = new unsigned long[num_result_fields];
+                uint8_t** result_buffer = new uint8_t*[num_result_fields];
+                uint64_t* bind_result_length = new uint64_t[num_result_fields];
                 my_bool* bind_result_is_null = new my_bool[num_result_fields];
                 my_bool* bind_result_error = new my_bool[num_result_fields];
 
                 for (uint32_t i = 0; i < num_result_fields; i++) {
                     m_log.info("Field %d = %s", i, result_fields[i].name);
                     m_log.info("max length = %lu", result_fields[i].length);
-                    result_buffer[i] = new char[result_fields[i].length];
+                    result_buffer[i] = new uint8_t[result_fields[i].length];
 
                     bind_results[i].buffer_type = MYSQL_TYPE_STRING;
                     bind_results[i].buffer = result_buffer[i];
@@ -399,7 +399,7 @@ void shibsp::MysqlAttributeResolver::resolveAttributes(shibsp::ResolutionContext
                             m_log.info("========");
                             for (uint32_t i = 0; i < num_result_fields; i++) {
                                 std::string column_name(result_fields[i].name);
-                                std::string column_value(result_buffer[i]);
+                                std::string column_value((char*)result_buffer[i]);
 
                                 m_log.info("%s => %s", column_name.c_str(), column_value.c_str());
 
