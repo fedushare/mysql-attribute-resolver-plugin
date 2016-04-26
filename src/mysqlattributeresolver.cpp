@@ -9,6 +9,7 @@
 
 #define MYSQLATTRIBUTERESOLVER_EXPORTS
 
+#include <algorithm>
 #include <memory>
 #include <regex.h>
 
@@ -156,39 +157,39 @@ shibsp::MysqlAttributeResolver::MysqlAttributeResolver(const xercesc::DOMElement
     : m_log(xmltooling::logging::Category::getInstance(SHIBSP_LOGCAT ".AttributeResolver.Mysql"))
 {
     // Connection information
-    xercesc::DOMElement* connectionElement = e ? xmltooling::XMLHelper::getFirstChildElement(e, connection) : nullptr;
-    if (!connectionElement) {
+    xercesc::DOMElement* connection_element = e ? xmltooling::XMLHelper::getFirstChildElement(e, connection) : nullptr;
+    if (!connection_element) {
         throw ConfigurationException("MySQL AttributeResolver requires <Connection> child element.");
     }
 
-    m_connection_host = xmltooling::XMLHelper::getAttrString(connectionElement, nullptr, host);
+    m_connection_host = xmltooling::XMLHelper::getAttrString(connection_element, nullptr, host);
     boost::trim(m_connection_host);
     if (m_connection_host.empty()) {
         throw ConfigurationException("MySQL AttributeResolver's <Connection> element requires host attribute.");
     }
-    m_connection_port = (uint32_t) xmltooling::XMLHelper::getAttrInt(connectionElement, 0, port);
+    m_connection_port = (uint32_t) xmltooling::XMLHelper::getAttrInt(connection_element, 0, port);
     if (!m_connection_port) {
         throw ConfigurationException("MySQL AttributeResolver's <Connection> element requires port attribute.");
     }
-    m_connection_username = xmltooling::XMLHelper::getAttrString(connectionElement, nullptr, username);
+    m_connection_username = xmltooling::XMLHelper::getAttrString(connection_element, nullptr, username);
     boost::trim(m_connection_username);
     if (m_connection_username.empty()) {
         throw ConfigurationException("MySQL AttributeResolver's <Connection> element requires username attribute.");
     }
-    m_connection_password = xmltooling::XMLHelper::getAttrString(connectionElement, nullptr, password);
+    m_connection_password = xmltooling::XMLHelper::getAttrString(connection_element, nullptr, password);
     boost::trim(m_connection_password);
     if (m_connection_password.empty()) {
         throw ConfigurationException("MySQL AttributeResolver's <Connection> element requires password attribute.");
     }
-    m_connection_dbname = xmltooling::XMLHelper::getAttrString(connectionElement, nullptr, dbname);
+    m_connection_dbname = xmltooling::XMLHelper::getAttrString(connection_element, nullptr, dbname);
     boost::trim(m_connection_dbname);
     if (m_connection_dbname.empty()) {
         throw ConfigurationException("MySQL AttributeResolver's <Connection> element requires dbname attribute.");
     }
 
     // Query
-    xercesc::DOMElement* queryElement = e ? xmltooling::XMLHelper::getFirstChildElement(e, query) : nullptr;
-    xmltooling::auto_ptr_char t(queryElement ? queryElement->getTextContent(): nullptr);
+    xercesc::DOMElement* query_element = e ? xmltooling::XMLHelper::getFirstChildElement(e, query) : nullptr;
+    xmltooling::auto_ptr_char t(query_element ? query_element->getTextContent(): nullptr);
     if (t.get()) {
         m_query = t.get();
         boost::trim(m_query);
@@ -197,57 +198,54 @@ shibsp::MysqlAttributeResolver::MysqlAttributeResolver(const xercesc::DOMElement
         throw ConfigurationException("MySQL AttributeResolver requires <Query> element.");
     }
 
-    regex_t paramRegex;
-    if (regcomp(&paramRegex, "=\\s*\\$([A-Za-z0-9]+)", REG_EXTENDED)) {
+    regex_t param_regex;
+    if (regcomp(&param_regex, "=\\s*\\$([A-Za-z0-9]+)", REG_EXTENDED)) {
         throw ConfigurationException("Unable to compile query parameter regular expression.");
     }
 
-    regmatch_t matchGroups[2];
-    int32_t matchReturn = regexec(&paramRegex, m_query.c_str(), 2, matchGroups, 0);
-    while (matchReturn == 0) {
-        std::string paramAttributeName = m_query.substr(matchGroups[1].rm_so, matchGroups[1].rm_eo);
-        m_query_bind_attributes.push_back(paramAttributeName);
+    regmatch_t match_groups[2];
+    int32_t match_return = regexec(&param_regex, m_query.c_str(), 2, match_groups, 0);
+    while (match_return == 0) {
+        std::string param_attr_name = m_query.substr(match_groups[1].rm_so, match_groups[1].rm_eo);
+        m_query_bind_attributes.push_back(param_attr_name);
 
-        m_query.erase(matchGroups[1].rm_so, matchGroups[1].rm_eo - matchGroups[1].rm_so);
-        m_query.replace(matchGroups[1].rm_so - 1, 1, "?");
+        m_query.erase(match_groups[1].rm_so, match_groups[1].rm_eo - match_groups[1].rm_so);
+        m_query.replace(match_groups[1].rm_so - 1, 1, "?");
 
-        matchReturn = regexec(&paramRegex, m_query.c_str(), 2, matchGroups, 0);
+        match_return = regexec(&param_regex, m_query.c_str(), 2, match_groups, 0);
     }
 
-    regfree(&paramRegex);
+    regfree(&param_regex);
 
     // Columns
-    xercesc::DOMElement* columnElement = e ? xmltooling::XMLHelper::getFirstChildElement(e, column) : nullptr;
-    while (columnElement) {
+    xercesc::DOMElement* column_element = e ? xmltooling::XMLHelper::getFirstChildElement(e, column) : nullptr;
+    while (column_element) {
 
-        std::string columnName = xmltooling::XMLHelper::getAttrString(columnElement, nullptr, name);
-        boost::trim(columnName);
+        std::string column_name = xmltooling::XMLHelper::getAttrString(column_element, nullptr, name);
+        boost::trim(column_name);
 
-        std::string attributeName = xmltooling::XMLHelper::getAttrString(columnElement, nullptr, attribute);
-        boost::trim(attributeName);
+        std::string attr_name = xmltooling::XMLHelper::getAttrString(column_element, nullptr, attribute);
+        boost::trim(attr_name);
 
-        if (!(columnName.empty() || attributeName.empty())) {
-            std::pair<std::set<std::string>::iterator, bool> attrResult = m_attributes.insert(attributeName);
-            if (attrResult.second == false) {
+        if (!(column_name.empty() || attr_name.empty())) {
+            auto insert_attr_result = m_attributes.insert(attr_name);
+            if (insert_attr_result.second == false) {
                 throw ConfigurationException("MySQL AttributeResolver cannot map multiple columns to the same attribute.");
             }
 
-            std::map<std::string, std::vector<std::string> >::iterator it;
-            it = m_columns.find(columnName);
-            if (it == m_columns.end()) {
-                std::vector<std::string> attributeList();
-                std::pair<std::map<std::string, std::vector<std::string> >::iterator, bool> insertResult;
-                insertResult = m_columns.insert(std::make_pair(columnName, std::vector<std::string>()));
-                if (insertResult.second) {
-                    it = insertResult.first;
+            auto col_and_attrs = m_columns.find(column_name);
+            if (col_and_attrs == m_columns.end()) {
+                auto insert_result = m_columns.insert(std::make_pair(column_name, std::vector<std::string>()));
+                if (insert_result.second) {
+                    col_and_attrs = insert_result.first;
                 } else {
                     throw ConfigurationException("MySQL AttributeResolver unable to map columns to attributes.");
                 }
             }
-            it->second.push_back(attributeName);
+            col_and_attrs->second.push_back(attr_name);
         }
 
-        columnElement = xmltooling::XMLHelper::getNextSiblingElement(columnElement, column);
+        column_element = xmltooling::XMLHelper::getNextSiblingElement(column_element, column);
     };
 
     if (m_columns.empty()) {
@@ -255,17 +253,17 @@ shibsp::MysqlAttributeResolver::MysqlAttributeResolver(const xercesc::DOMElement
     }
 
     m_log.info("Query = %s", m_query.c_str());
-    for (std::vector<std::string>::const_iterator it = m_query_bind_attributes.begin(); it != m_query_bind_attributes.end(); it++) {
-        m_log.info("Bind attribute: %s", it->c_str());
+    for (auto attr_name : m_query_bind_attributes) {
+        m_log.info("Bind attribute: %s", attr_name.c_str());
     }
 
-    for (std::set<std::string>::const_iterator it = m_attributes.begin(); it != m_attributes.end(); it++) {
-        m_log.info("Resolves %s attribute", it->c_str());
+    for (auto attr_name : m_attributes) {
+        m_log.info("Resolves %s attribute", attr_name.c_str());
     }
 
-    for (std::map<std::string, std::vector<std::string> >::const_iterator it = m_columns.begin(); it != m_columns.end(); it++) {
-        for (std::vector<std::string>::const_iterator it2 = it->second.begin(); it2 != it->second.end(); it2++) {
-            m_log.info("Column %s -> attribute %s", it->first.c_str(), it2->c_str());
+    for (auto col_and_attrs : m_columns) {
+        for (auto attr_name : col_and_attrs.second) {
+            m_log.info("Column %s -> attribute %s", col_and_attrs.first.c_str(), attr_name.c_str());
         }
     }
 }
@@ -273,29 +271,25 @@ shibsp::MysqlAttributeResolver::MysqlAttributeResolver(const xercesc::DOMElement
 
 void shibsp::MysqlAttributeResolver::resolveAttributes(shibsp::ResolutionContext& ctx) const
 {
-    shibsp::MysqlContext& tctx = dynamic_cast<shibsp::MysqlContext&>(ctx);
-    if (!tctx.getInputAttributes()) {
+    shibsp::MysqlContext& mctx = dynamic_cast<shibsp::MysqlContext&>(ctx);
+    if (!mctx.getInputAttributes()) {
         return;
     }
 
+    // Create a map of attribute name to attribute for all attributes that are used as query parameters
     std::map<std::string,const shibsp::Attribute*> attrmap;
-    for (std::vector<std::string>::const_iterator a = m_query_bind_attributes.begin(); a != m_query_bind_attributes.end(); ++a) {
-        shibsp::Attribute* attr = nullptr;
-        for (std::vector<shibsp::Attribute*>::const_iterator it = tctx.getInputAttributes()->begin(); it != tctx.getInputAttributes()->end(); ++it) {
-            if (*a == (*it)->getId()) {
-                attr = *it;
-                break;
-            }
-        }
-        if (!attr) {
-            m_log.warn("Query parameter attribute (%s) missing", a->c_str());
+    for (auto attr_name : m_query_bind_attributes) {
+        auto attr_id_matches = [attr_name] (shibsp::Attribute* a) { return attr_name == a->getId(); };
+        auto attr = std::find_if(mctx.getInputAttributes()->begin(), mctx.getInputAttributes()->end(), attr_id_matches);
+        if (attr == mctx.getInputAttributes()->end()) {
+            m_log.warn("Query parameter attribute (%s) missing", attr_name.c_str());
             return;
         }
-        else if (!attrmap.empty() && attr->valueCount() != attrmap.begin()->second->valueCount()) {
+        else if (!attrmap.empty() && (*attr)->valueCount() != attrmap.begin()->second->valueCount()) {
             m_log.warn("All query parameter attributes must contain equal number of values");
             return;
         }
-        attrmap[*a] = attr;
+        attrmap[attr_name] = *attr;
     }
 
     MYSQL* db_connection = nullptr;
@@ -332,27 +326,27 @@ void shibsp::MysqlAttributeResolver::resolveAttributes(shibsp::ResolutionContext
         return;
     }
 
-    uint32_t numParams = m_query_bind_attributes.size();
-    MYSQL_BIND* bind_params = new MYSQL_BIND[numParams];
-    unsigned long* bind_params_length = new unsigned long[numParams];
-    my_bool* bind_params_is_null = new my_bool[numParams];
-    memset(bind_params_is_null, 0, numParams * sizeof(my_bool));
-    my_bool* bind_params_error = new my_bool[numParams];
+    uint32_t num_params = m_query_bind_attributes.size();
+    MYSQL_BIND* bind_params = new MYSQL_BIND[num_params];
+    unsigned long* bind_params_length = new unsigned long[num_params];
+    my_bool* bind_params_is_null = new my_bool[num_params];
+    memset(bind_params_is_null, 0, num_params * sizeof(my_bool));
+    my_bool* bind_params_error = new my_bool[num_params];
 
-    for (uint32_t i = 0; i < numParams; i++) {
+    for (uint32_t i = 0; i < num_params; i++) {
         bind_params[i].buffer_type = MYSQL_TYPE_STRING;
-        std::map<std::string,const shibsp::Attribute*>::const_iterator a = attrmap.find(m_query_bind_attributes[i]);
+        auto a = attrmap.find(m_query_bind_attributes[i]);
         if (a == attrmap.end()) {
             m_log.warn("No '%s' attribute found to bind to query", m_query_bind_attributes[i].c_str());
         } else {
             if (a->second->getSerializedValues().empty()) {
                 m_log.warn("'%s' attribute has no value to bind to query", m_query_bind_attributes[i].c_str());
             } else {
-                std::string attributeValue = a->second->getSerializedValues().at(0);
-                m_log.info("Binding '%s' to %s", attributeValue.c_str(), m_query_bind_attributes[i].c_str());
-                bind_params[i].buffer = (void *) attributeValue.c_str();
-                bind_params[i].buffer_length = attributeValue.length();
-                bind_params_length[i] = attributeValue.length();
+                std::string attr_value = a->second->getSerializedValues().at(0);
+                m_log.info("Binding '%s' to %s", attr_value.c_str(), m_query_bind_attributes[i].c_str());
+                bind_params[i].buffer = (void *) attr_value.c_str();
+                bind_params[i].buffer_length = attr_value.length();
+                bind_params_length[i] = attr_value.length();
             }
         }
         bind_params[i].is_null = &bind_params_is_null[i];
@@ -407,10 +401,10 @@ void shibsp::MysqlAttributeResolver::resolveAttributes(shibsp::ResolutionContext
 
                                 m_log.info("%s => %s", column_name.c_str(), column_value.c_str());
 
-                                std::map<std::string, std::vector<std::string> >::const_iterator it;
-                                if ((it = m_columns.find(column_name)) != m_columns.end()) {
-                                    for (std::vector<std::string>::const_iterator dest_attr_name = it->second.begin(); dest_attr_name != it->second.end(); ++dest_attr_name) {
-                                        std::vector<std::string> attr_ids(1, *dest_attr_name);
+                                auto attr_and_cols = m_columns.find(column_name);
+                                if (attr_and_cols != m_columns.end()) {
+                                    for (auto dest_attr_name : attr_and_cols->second) {
+                                        std::vector<std::string> attr_ids(1, dest_attr_name);
                                         std::auto_ptr<shibsp::SimpleAttribute> dest_attr(new shibsp::SimpleAttribute(attr_ids));
                                         dest_attr->getValues().push_back(column_value);
                                         if (dest_attr.get() && dest_attr->valueCount()) {
@@ -452,8 +446,8 @@ void shibsp::MysqlAttributeResolver::resolveAttributes(shibsp::ResolutionContext
 
 void shibsp::MysqlAttributeResolver::getAttributeIds(std::vector<std::string>& attributes) const
 {
-    for (std::set<std::string>::const_iterator it = m_attributes.begin(); it != m_attributes.end(); it++) {
-        attributes.push_back(*it);
+    for (auto attr_name : m_attributes) {
+        attributes.push_back(attr_name);
     }
 }
 
