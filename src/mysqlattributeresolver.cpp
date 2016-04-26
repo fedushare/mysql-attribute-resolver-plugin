@@ -227,7 +227,9 @@ shibsp::MysqlAttributeResolver::MysqlAttributeResolver(const xercesc::DOMElement
         std::string attr_name = xmltooling::XMLHelper::getAttrString(column_element, nullptr, attribute);
         boost::trim(attr_name);
 
-        if (!(column_name.empty() || attr_name.empty())) {
+        if (column_name.empty() || attr_name.empty()) {
+            throw ConfigurationException("MySQL AttributeResolver <Column> elements require 'name' and 'attribute' XML attributes.");
+        } else {
             auto insert_attr_result = m_attributes.insert(attr_name);
             if (insert_attr_result.second == false) {
                 throw ConfigurationException("MySQL AttributeResolver cannot map multiple columns to the same attribute.");
