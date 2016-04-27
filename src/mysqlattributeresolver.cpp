@@ -39,7 +39,7 @@ namespace shibsp {
     class SHIBSP_DLLLOCAL MysqlContext : public ResolutionContext
     {
     public:
-        MysqlContext(const vector<Attribute*>* attributes) : m_inputAttributes(attributes) {
+        MysqlContext(const vector<Attribute*>* attributes) : m_input_attributes(attributes) {
         }
 
         ~MysqlContext() {
@@ -47,7 +47,7 @@ namespace shibsp {
         }
 
         const vector<Attribute*>* getInputAttributes() const {
-            return m_inputAttributes;
+            return m_input_attributes;
         }
 
         vector<Attribute*>& getResolvedAttributes() {
@@ -59,7 +59,7 @@ namespace shibsp {
         }
 
     private:
-        const vector<Attribute*>* m_inputAttributes;
+        const vector<Attribute*>* m_input_attributes;
         vector<Attribute*> m_attributes;
         static vector<opensaml::Assertion*> m_assertions;   // empty dummy
     };
