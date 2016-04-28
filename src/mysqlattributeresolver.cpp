@@ -475,12 +475,35 @@ void shibsp::MysqlAttributeResolver::resolveAttributes(shibsp::ResolutionContext
 
     // Only add attributes that have values to the resolution context
     for (auto attr_id_and_values : all_attr_values) {
-        if (!attr_id_and_values.second.empty()) {
-            SimpleAttribute *attr = new SimpleAttribute(vector<string>(1, attr_id_and_values.first));
-            for (auto val : attr_id_and_values.second) {
-                attr->getValues().push_back(val);
+
+        // Skip attributes for which no values were found.
+        if (attr_id_and_values.second.empty()) {
+            continue;
+        }
+
+        auto attr_id = attr_id_and_values.first;
+        auto existing_attr = find_if(mctx.getInputAttributes()->begin(), mctx.getInputAttributes()->end(), [attr_id] (Attribute* a) {
+            return attr_id == a->getId();
+        });
+
+        // If an attribute with the ID already exists, add values to it. Otherwise, create a new attribute.
+        SimpleAttribute* dest_attr = nullptr;
+        if (existing_attr != mctx.getInputAttributes()->end()) {
+            dest_attr = dynamic_cast<SimpleAttribute*>(*existing_attr);
+            if (!dest_attr) {
+                m_log.warn("Can't add values to non-simple attribute '%s'", attr_id.c_str());
+                continue;
             }
-            ctx.getResolvedAttributes().push_back(attr);
+        } else {
+            dest_attr = new SimpleAttribute(vector<string>(1, attr_id));
+        }
+
+        for (auto val : attr_id_and_values.second) {
+            dest_attr->getValues().push_back(val);
+        }
+
+        if (existing_attr == mctx.getInputAttributes()->end()) {
+            ctx.getResolvedAttributes().push_back(dest_attr);
         }
     }
 
