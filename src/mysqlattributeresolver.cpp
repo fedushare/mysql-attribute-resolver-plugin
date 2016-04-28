@@ -463,6 +463,8 @@ void shibsp::MysqlAttributeResolver::resolveAttributes(shibsp::ResolutionContext
                         for (auto attr_id : col_and_attr_ids.second) {
                             all_attr_values.at(attr_id).push_back(col_and_row_attr_value->second);
                         }
+                    } else {
+                        m_log.warn("Required column '%s' not found in query result.", col_and_attr_ids.first.c_str());
                     }
                 }
             }
