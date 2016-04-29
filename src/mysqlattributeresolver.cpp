@@ -239,16 +239,7 @@ shibsp::MysqlAttributeResolver::MysqlAttributeResolver(const xercesc::DOMElement
                 throw ConfigurationException("MySQL AttributeResolver cannot map multiple columns to the same attribute.");
             }
 
-            auto col_and_attr_ids = m_cols_to_attr_ids.find(column_name);
-            if (col_and_attr_ids == m_cols_to_attr_ids.end()) {
-                auto r = m_cols_to_attr_ids.insert(make_pair(column_name, vector<string>()));
-                if (r.second) {
-                    col_and_attr_ids = r.first;
-                } else {
-                    throw ConfigurationException("MySQL AttributeResolver unable to map columns to attributes.");
-                }
-            }
-            col_and_attr_ids->second.push_back(attr_id);
+            m_cols_to_attr_ids[column_name].push_back(attr_id);
         }
 
         column_element = xmltooling::XMLHelper::getNextSiblingElement(column_element, column);
@@ -296,7 +287,7 @@ vector<map<string, string> > shibsp::MysqlAttributeResolver::extractQueryParamet
             }
 
             for (uint32_t i = 0; i < value_count; i++) {
-                query_params.at(i).insert(make_pair(attr_name, (*attr)->getSerializedValues().at(i)));
+                query_params[i][attr_name] = (*attr)->getSerializedValues().at(i);
             }
         }
     }
@@ -383,7 +374,7 @@ vector<map<string, string>> shibsp::MysqlAttributeResolver::runQuery(MYSQL* conn
                     } else {
                         string column_value((char*)result_buffer[i]);
                         m_log.info("%s => %s", column_name.c_str(), column_value.c_str());
-                        row_results.insert(make_pair(column_name, column_value));
+                        row_results[column_name] = column_value;
                     }
                 }
 
@@ -450,9 +441,6 @@ void shibsp::MysqlAttributeResolver::resolveAttributes(shibsp::ResolutionContext
 
     // Collect attribute values from all row results from all queries.
     map<string, vector<string> > all_attr_values;
-    for (auto attr_id : m_resolve_attr_ids) {
-        all_attr_values.insert(make_pair(attr_id, vector<string>()));
-    }
     for (auto query_params : all_query_params) {
         try {
             auto query_results = runQuery(db_connection, query_params);
@@ -461,7 +449,7 @@ void shibsp::MysqlAttributeResolver::resolveAttributes(shibsp::ResolutionContext
                     auto col_and_row_attr_value = row_result.find(col_and_attr_ids.first);
                     if (col_and_row_attr_value != row_result.end()) {
                         for (auto attr_id : col_and_attr_ids.second) {
-                            all_attr_values.at(attr_id).push_back(col_and_row_attr_value->second);
+                            all_attr_values[attr_id].push_back(col_and_row_attr_value->second);
                         }
                     } else {
                         m_log.warn("Required column '%s' not found in query result.", col_and_attr_ids.first.c_str());
