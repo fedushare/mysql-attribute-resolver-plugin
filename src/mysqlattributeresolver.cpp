@@ -210,8 +210,8 @@ shibsp::MysqlAttributeResolver::MysqlAttributeResolver(const xercesc::DOMElement
     regmatch_t match_groups[2];
     int32_t match_return = regexec(&param_regex, m_query.c_str(), 2, match_groups, 0);
     while (match_return == 0) {
-        string param_attr_name = m_query.substr(match_groups[1].rm_so, match_groups[1].rm_eo);
-        m_query_param_attr_ids.push_back(param_attr_name);
+        string param_attr_id = m_query.substr(match_groups[1].rm_so, match_groups[1].rm_eo);
+        m_query_param_attr_ids.push_back(param_attr_id);
 
         m_query.erase(match_groups[1].rm_so, match_groups[1].rm_eo - match_groups[1].rm_so);
         m_query.replace(match_groups[1].rm_so - 1, 1, "?");
@@ -250,8 +250,8 @@ shibsp::MysqlAttributeResolver::MysqlAttributeResolver(const xercesc::DOMElement
     }
 
     m_log.info("Query = %s", m_query.c_str());
-    for (auto attr_name : m_query_param_attr_ids) {
-        m_log.info("Bind attribute: %s", attr_name.c_str());
+    for (auto attr_id : m_query_param_attr_ids) {
+        m_log.info("Bind attribute: %s", attr_id.c_str());
     }
 
     m_log.info("Resolves %d attributes", m_resolve_attr_ids.size());
@@ -276,18 +276,18 @@ vector<map<string, string> > shibsp::MysqlAttributeResolver::extractQueryParamet
         uint32_t value_count = input_attributes.front()->valueCount();
         query_params.resize(value_count, map<string, string>());
 
-        for (auto attr_name : m_query_param_attr_ids) {
-            auto attr = find_if(input_attributes.begin(), input_attributes.end(), [attr_name] (Attribute* a) {
-                return attr_name == a->getId();
+        for (auto attr_id : m_query_param_attr_ids) {
+            auto attr = find_if(input_attributes.begin(), input_attributes.end(), [attr_id] (Attribute* a) {
+                return attr_id == a->getId();
             });
             if (attr == input_attributes.end()) {
-                throw runtime_error("No input attribute for query parameter " + attr_name);
+                throw runtime_error("No input attribute for query parameter " + attr_id);
             } else if ((*attr)->valueCount() != value_count) {
                 throw runtime_error("All input attributes for query parameters must contain equal number of values.");
             }
 
             for (uint32_t i = 0; i < value_count; i++) {
-                query_params[i][attr_name] = (*attr)->getSerializedValues().at(i);
+                query_params[i][attr_id] = (*attr)->getSerializedValues().at(i);
             }
         }
     }
