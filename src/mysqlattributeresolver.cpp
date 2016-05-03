@@ -154,8 +154,8 @@ static const XMLCh dbname[] = UNICODE_LITERAL_6(d,b,n,a,m,e);
 static const XMLCh query[] = UNICODE_LITERAL_5(Q,u,e,r,y);
 
 static const XMLCh column[] = UNICODE_LITERAL_6(C,o,l,u,m,n);
-static const XMLCh name[] = UNICODE_LITERAL_4(n,a,m,e);
-static const XMLCh attribute[] = UNICODE_LITERAL_9(a,t,t,r,i,b,u,t,e);
+static const XMLCh column_name[] = UNICODE_LITERAL_10(c,o,l,u,m,n,N,a,m,e);
+static const XMLCh attribute_id[] = UNICODE_LITERAL_11(a,t,t,r,i,b,u,t,e,I,D);
 
 shibsp::MysqlAttributeResolver::MysqlAttributeResolver(const xercesc::DOMElement* e)
     : m_log(xmltooling::logging::Category::getInstance(SHIBSP_LOGCAT ".AttributeResolver.Mysql"))
@@ -225,21 +225,21 @@ shibsp::MysqlAttributeResolver::MysqlAttributeResolver(const xercesc::DOMElement
     xercesc::DOMElement* column_element = e ? xmltooling::XMLHelper::getFirstChildElement(e, column) : nullptr;
     while (column_element) {
 
-        string column_name = xmltooling::XMLHelper::getAttrString(column_element, nullptr, name);
-        boost::trim(column_name);
+        string col_name = xmltooling::XMLHelper::getAttrString(column_element, nullptr, column_name);
+        boost::trim(col_name);
 
-        string attr_id = xmltooling::XMLHelper::getAttrString(column_element, nullptr, attribute);
+        string attr_id = xmltooling::XMLHelper::getAttrString(column_element, nullptr, attribute_id);
         boost::trim(attr_id);
 
-        if (column_name.empty() || attr_id.empty()) {
-            throw ConfigurationException("MySQL AttributeResolver <Column> elements require 'name' and 'attribute' XML attributes.");
+        if (col_name.empty() || attr_id.empty()) {
+            throw ConfigurationException("MySQL AttributeResolver <Column> elements require 'columnName' and 'attributeID' XML attributes.");
         } else {
             auto r = m_resolve_attr_ids.insert(attr_id);
             if (r.second == false) {
                 throw ConfigurationException("MySQL AttributeResolver cannot map multiple columns to the same attribute.");
             }
 
-            m_cols_to_attr_ids[column_name].push_back(attr_id);
+            m_cols_to_attr_ids[col_name].push_back(attr_id);
         }
 
         column_element = xmltooling::XMLHelper::getNextSiblingElement(column_element, column);
@@ -368,13 +368,13 @@ vector<map<string, string>> shibsp::MysqlAttributeResolver::runQuery(MYSQL* conn
                 map<string, string> row_results;
                 m_log.info("=== Row ===");
                 for (uint32_t i = 0; i < num_result_fields; i++) {
-                    string column_name(result_fields[i].name);
+                    string col_name(result_fields[i].name);
                     if (*bind_results[i].is_null) {
-                        m_log.info("Null value in '%s' column.", column_name.c_str());
+                        m_log.info("Null value in '%s' column.", col_name.c_str());
                     } else {
                         string column_value((char*)result_buffer[i]);
-                        m_log.info("%s => %s", column_name.c_str(), column_value.c_str());
-                        row_results[column_name] = column_value;
+                        m_log.info("%s => %s", col_name.c_str(), column_value.c_str());
+                        row_results[col_name] = column_value;
                     }
                 }
 

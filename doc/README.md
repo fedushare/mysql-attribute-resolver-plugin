@@ -58,7 +58,7 @@ sudo make install
                 SELECT * FROM attributes WHERE eppn = $eppn
             ]]>
         </Query>
-        <Column name="columnName" attribute="attributeName" />
+        <Column columnName="columnName" attributeID="attributeName" />
     </AttributeResolver>
     ```
 
@@ -102,8 +102,8 @@ Attributes:
 
 | Name | Type | Default | Description |
 | --- | --- | --- | --- |
-| name | string, required | | The name of the column in the query result set |
-| attribute | string, required | | The name of the attribute to populate |
+| columnName | string, required | | The name of the column in the query result set |
+| attributeID | string, required | | The ID of the attribute to populate |
 
 ## References
 
