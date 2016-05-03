@@ -169,11 +169,11 @@ shibsp::MysqlAttributeResolver::MysqlAttributeResolver(const xercesc::DOMElement
     m_connection_host = xmltooling::XMLHelper::getAttrString(connection_element, nullptr, host);
     boost::trim(m_connection_host);
     if (m_connection_host.empty()) {
-        throw ConfigurationException("MySQL AttributeResolver's <Connection> element requires host attribute.");
+        m_connection_host = string("localhost");
     }
     m_connection_port = (uint32_t) xmltooling::XMLHelper::getAttrInt(connection_element, 0, port);
     if (!m_connection_port) {
-        throw ConfigurationException("MySQL AttributeResolver's <Connection> element requires port attribute.");
+        m_connection_port = 3306;
     }
     m_connection_username = xmltooling::XMLHelper::getAttrString(connection_element, nullptr, username);
     boost::trim(m_connection_username);

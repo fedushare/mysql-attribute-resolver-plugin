@@ -72,8 +72,8 @@ Cardinality: exactly one
 
 | Name | Type | Default | Description |
 | --- | --- | --- | --- |
-| host | string, required | | The database server to connect to |
-| port | integer, required | | The port on the database server to connect to |
+| host | string, required | localhost | The database server to connect to |
+| port | integer, required | 3306 | The port on the database server to connect to |
 | username | string, required | | The username to use to connect to the database |
 | password | string, required | | The password to use to connect to the database |
 | dbname | string, required | | The name of the MySQL database to connect to |
